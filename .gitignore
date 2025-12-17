@@ -1,0 +1,10 @@
+# Example folder (legacy scripts)
+example/
+
+# Excel files (sensitive data)
+*.xls
+*.xlsx
+
+# OS generated files
+.DS_Store
+Thumbs.db

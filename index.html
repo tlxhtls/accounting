@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>지출 내역 표준화 도구</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- SheetJS -->
+    <script lang="javascript" src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <style>
+        .editable {
+            cursor: text;
+            background-color: #f9fafb;
+            transition: background 0.2s;
+        }
+
+        .editable:hover {
+            background-color: #f3f4f6;
+        }
+
+        .editable:focus {
+            outline: 2px solid #3b82f6;
+            background-color: white;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-100 h-screen flex overflow-hidden">
+
+    <!-- Configure Tailwind -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#2563eb',
+                        secondary: '#475569',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Sidebar -->
+    <aside class="w-80 bg-white border-r border-gray-200 flex flex-col shadow-lg z-10">
+        <div class="p-6 border-b border-gray-100">
+            <h1 class="text-xl font-bold text-gray-800 flex items-center gap-2">
+                <span class="text-primary text-2xl">📊</span> 지출 표준화
+            </h1>
+            <p class="text-sm text-gray-500 mt-1">엑셀 파일을 업로드하여 자동 분류하세요.</p>
+        </div>
+
+        <div class="p-6 flex-1 overflow-y-auto">
+            <div class="space-y-6">
+                <!-- File Upload -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">엑셀 파일 업로드</label>
+                    <div class="flex items-center justify-center w-full">
+                        <label for="dropzone-file"
+                            class="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors">
+                            <div class="flex flex-col items-center justify-center pt-5 pb-6">
+                                <svg class="w-8 h-8 mb-2 text-gray-400" fill="none" stroke="currentColor"
+                                    viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12">
+                                    </path>
+                                </svg>
+                                <p class="text-sm text-gray-500"><span class="font-semibold">클릭 또는 드래그하여 업로드</span></p>
+                                <p class="text-xs text-gray-400 mt-1">XLS, XLSX (다중 선택 가능)</p>
+                            </div>
+                            <input id="dropzone-file" type="file" class="hidden" multiple
+                                accept=".cls,.xlsx,.xls,.xlsm" />
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Stats -->
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">처리 현황</h3>
+                    <div class="space-y-2 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">파일 수:</span>
+                            <span id="stat-files" class="font-medium">0</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">총 데이터:</span>
+                            <span id="stat-rows" class="font-medium text-primary">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- File List Log -->
+                <div>
+                    <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">업로드된 파일</h3>
+                    <ul id="file-list"
+                        class="text-xs text-gray-600 space-y-1 list-disc list-inside h-32 overflow-y-auto bg-gray-50 p-2 rounded border border-gray-100">
+                        <li class="pl-1 italic text-gray-400">파일 없음</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="p-4 border-t border-gray-100 bg-gray-50 space-y-2">
+            <button id="btn-export" disabled
+                class="w-full bg-primary hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-medium py-2.5 px-4 rounded-lg shadow transition-colors flex items-center justify-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                </svg>
+                엑셀 다운로드
+            </button>
+            <button id="btn-reset"
+                class="w-full bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium py-2 px-4 rounded-lg transition-colors text-sm">
+                초기화
+            </button>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col min-w-0 bg-white">
+        <!-- Header -->
+        <header class="h-16 border-b border-gray-200 flex items-center justify-between px-8 bg-white">
+            <h2 class="text-lg font-semibold text-gray-800">데이터 미리보기</h2>
+            <div class="text-sm text-gray-500">
+                <span class="inline-block w-3 h-3 bg-blue-100 border border-blue-300 mr-1 rounded-sm"></span> 편집 가능 영역
+            </div>
+        </header>
+
+        <!-- Data Grid -->
+        <div class="flex-1 overflow-auto bg-gray-50 p-6">
+            <div class="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
+                <table class="w-full text-xs text-left text-gray-500">
+                    <thead class="text-[10px] text-gray-700 uppercase bg-gray-100 sticky top-0">
+                        <tr>
+                            <th scope="col" class="px-4 py-3 w-12">#</th>
+                            <th scope="col" class="px-2 py-2 w-24">발생일시</th>
+                            <th scope="col" class="px-2 py-2 w-28">항목 (C) <span
+                                    class="text-blue-500 text-[9px]">EDIT</span></th>
+                            <th scope="col" class="px-2 py-2 w-40">지출처 (D) <span
+                                    class="text-blue-500 text-[9px]">EDIT</span></th>
+                            <th scope="col" class="px-2 py-2 w-20 text-right">총액</th>
+                            <th scope="col" class="px-2 py-2 w-20 text-right">계좌이체</th>
+                            <th scope="col" class="px-2 py-2 w-20">지출계좌</th>
+                            <th scope="col" class="px-2 py-2 w-20 text-right">현금</th>
+                            <th scope="col" class="px-2 py-2 w-20 text-right">신용카드</th>
+                            <th scope="col" class="px-2 py-2 w-20">카드상세</th>
+                            <th scope="col" class="px-2 py-2 w-24">중분류 (L) <span
+                                    class="text-blue-500 text-[9px]">EDIT</span></th>
+                            <th scope="col" class="px-2 py-2 w-24">대분류 (M) <span
+                                    class="text-blue-500 text-[9px]">EDIT</span></th>
+                        </tr>
+                    </thead>
+                    <tbody id="data-table-body" class="divide-y divide-gray-100">
+                        <tr>
+                            <td colspan="12" class="px-6 py-10 text-center text-gray-400">데이터가 없습니다. 좌측에서 파일을 업로드하세요.
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <!-- Load Rules & Processor -->
+    <script src="./rules.js"></script>
+    <script src="./router.js"></script>
+    <script src="./processor.js"></script>
+
+    <!-- Main Logic -->
+    <script>
+        // Global State
+        let processedData = [];
+        let fileCount = 0;
+
+        // Elements
+        const dropzoneLabel = document.querySelector('label[for="dropzone-file"]');
+        const fileInput = document.getElementById('dropzone-file');
+        const fileList = document.getElementById('file-list');
+        const tableBody = document.getElementById('data-table-body');
+        const statFiles = document.getElementById('stat-files');
+        const statRows = document.getElementById('stat-rows');
+        const btnExport = document.getElementById('btn-export');
+        const btnReset = document.getElementById('btn-reset');
+
+        // --- Event Listeners ---
+
+        // Drag & Drop
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropzoneLabel.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropzoneLabel.addEventListener(eventName, highlight, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropzoneLabel.addEventListener(eventName, unhighlight, false);
+        });
+
+        function highlight(e) {
+            dropzoneLabel.classList.add('bg-gray-100', 'border-blue-400');
+        }
+
+        function unhighlight(e) {
+            dropzoneLabel.classList.remove('bg-gray-100', 'border-blue-400');
+        }
+
+        dropzoneLabel.addEventListener('drop', handleDrop, false);
+
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            handleFiles(files);
+        }
+
+        // Input Change
+        fileInput.addEventListener('change', (e) => {
+            const files = e.target.files;
+            handleFiles(files);
+        });
+
+        async function handleFiles(files) {
+            if (!files.length) return;
+
+            // Update UI immediately
+            fileList.innerHTML = fileCount === 0 ? '' : fileList.innerHTML;
+
+            for (const file of files) {
+                try {
+                    // Use Processor
+                    const data = await Processor.processFile(file);
+
+                    // Check for error object
+                    if (data.length === 1 && data[0].error) {
+                        addLog(file.name, false, data[0].msg);
+                        continue;
+                    }
+
+                    if (data && data.length > 0) {
+                        processedData = [...processedData, ...data];
+                        addLog(file.name, true);
+                    } else {
+                        addLog(file.name, false, "데이터 없음");
+                    }
+                } catch (err) {
+                    console.error(err);
+                    addLog(file.name, false, err.message);
+                }
+            }
+
+            fileCount += files.length;
+            updateStats();
+            renderTable();
+        }
+
+        btnReset.addEventListener('click', () => {
+            if (!confirm('모든 데이터를 초기화하시겠습니까?')) return;
+            processedData = [];
+            fileCount = 0;
+            fileList.innerHTML = '<li class="pl-1 italic text-gray-400">파일 없음</li>';
+            fileInput.value = '';
+            updateStats();
+            renderTable();
+        });
+
+        btnExport.addEventListener('click', () => {
+            Processor.exportToExcel(processedData);
+        });
+
+
+        // --- Logic Functions ---
+
+        function addLog(filename, success, msg = '') {
+            const li = document.createElement('li');
+            li.className = success ? 'text-green-600' : 'text-red-500 font-semibold';
+            li.textContent = `${filename} ${msg ? `(${msg})` : '✅'}`;
+            fileList.appendChild(li);
+        }
+
+        function updateStats() {
+            statFiles.textContent = fileCount;
+            statRows.textContent = processedData.length;
+            btnExport.disabled = processedData.length === 0;
+        }
+
+        function renderTable() {
+            if (processedData.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="8" class="px-6 py-10 text-center text-gray-400">데이터가 없습니다. 좌측에서 파일을 업로드하세요.</td></tr>';
+                return;
+            }
+
+            tableBody.innerHTML = processedData.map((row, index) => `
+                <tr class="hover:bg-gray-50 group transition-colors border-b border-gray-50">
+                    <td class="px-2 py-1 font-mono text-[10px] text-gray-400 text-center">${index + 1}</td>
+                    <!-- 1. 발생일시 -->
+                    <td class="px-2 py-1 font-mono text-[10px] whitespace-nowrap text-gray-600">
+                        ${row.display_date}
+                    </td>
+                    <!-- 2. 항목 (Editable) -->
+                    <td class="px-2 py-1 text-xs text-gray-900 border-l border-r border-transparent hover:border-blue-200">
+                        <div contenteditable="true" 
+                             class="editable px-1.5 py-0.5 rounded truncate max-w-[100px]"
+                             onblur="updateData('${row.id}', 'item', this.innerText)">
+                            ${row.item || ''}
+                        </div>
+                    </td>
+                    <!-- 3. 지출처 (read-only, original source preserved) -->
+                    <td class="px-2 py-1 text-xs text-gray-700 truncate max-w-[150px]" title="${row.raw_description}">
+                        ${row.raw_description}
+                    </td>
+                    <!-- 4. 총액 -->
+                    <td class="px-2 py-1 font-mono text-[10px] text-right text-gray-700">
+                        ${row.amount ? row.amount.toLocaleString() : ''}
+                    </td>
+                    <!-- 5. 계좌이체 -->
+                    <td class="px-2 py-1 font-mono text-[10px] text-right text-gray-500">
+                        ${row.col_transfer ? row.col_transfer.toLocaleString() : ''}
+                    </td>
+                    <!-- 6. 지출계좌 -->
+                    <td class="px-2 py-1 text-[10px] text-gray-500 truncate max-w-[80px]">
+                        ${row.col_account}
+                    </td>
+                    <!-- 7. 현금 -->
+                    <td class="px-2 py-1 font-mono text-[10px] text-right text-gray-500">
+                        ${row.col_cash ? row.col_cash.toLocaleString() : ''}
+                    </td>
+                    <!-- 8. 신용카드 -->
+                    <td class="px-2 py-1 font-mono text-[10px] text-right text-gray-500">
+                        ${row.col_card ? row.col_card.toLocaleString() : ''}
+                    </td>
+                    <!-- 9. 신용카드상세 -->
+                    <td class="px-2 py-1 text-[10px] text-gray-500 truncate max-w-[80px]">
+                        ${row.col_card_detail}
+                    </td>
+                    <!-- 10. 중분류 (Editable) -->
+                    <td class="px-2 py-1 text-xs border-l border-r border-transparent hover:border-blue-200">
+                         <div contenteditable="true" 
+                             class="editable px-1.5 py-0.5 rounded truncate max-w-[100px]"
+                             onblur="updateData('${row.id}', 'category_main', this.innerText)">
+                            ${row.category_main}
+                        </div>
+                    </td>
+                    <!-- 11. 대분류 (Editable) -->
+                    <td class="px-2 py-1 text-xs border-r border-transparent hover:border-blue-200">
+                         <div contenteditable="true" 
+                             class="editable px-1.5 py-0.5 rounded truncate max-w-[100px]"
+                             onblur="updateData('${row.id}', 'category_mso', this.innerText)">
+                            ${row.category_mso}
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // Update data from contenteditable
+        window.updateData = (id, field, value) => {
+            const row = processedData.find(d => d.id === id);
+            if (row) {
+                row[field] = value.trim();
+            }
+        };
+    </script>
+</body>
+
+</html>
