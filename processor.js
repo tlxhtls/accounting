@@ -134,10 +134,8 @@ const Processor = {
             if (idxAmtMain !== -1 && row[idxAmtMain]) valAmount = row[idxAmtMain];
             else if (idxAmtAlt !== -1 && row[idxAmtAlt]) valAmount = row[idxAmtAlt];
 
-            // Clean Amount
-            if (typeof valAmount === 'string') {
-                valAmount = parseFloat(valAmount.replace(/[^0-9.-]/g, '')) || 0;
-            }
+            // Extract KRW amount (handles foreign currency patterns)
+            valAmount = this.extractKRW(valAmount);
 
             // Raw Description
             const valDesc = (idxDesc !== -1 && row[idxDesc]) ? String(row[idxDesc]).trim() : '';
@@ -231,6 +229,33 @@ const Processor = {
         }
 
         return data;
+    },
+
+    /**
+     * Extracts Korean Won (KRW) amount from a value.
+     * Handles foreign currency patterns like "￦36,411<br/>[USD]25.72"
+     * @param {any} value - The raw amount value
+     * @returns {number} - The extracted KRW amount
+     */
+    extractKRW(value) {
+        // Already a number
+        if (typeof value === 'number') return value;
+        if (!value) return 0;
+
+        const str = String(value);
+
+        // 1. Look for ￦ symbol followed by amount
+        const wonMatch = str.match(/￦\s*([\d,]+)/);
+        if (wonMatch) {
+            return parseFloat(wonMatch[1].replace(/,/g, '')) || 0;
+        }
+
+        // 2. Take content before <br/> or <br> tag (removes foreign currency part)
+        const beforeBr = str.split(/<br\s*\/?>/i)[0];
+
+        // 3. Remove currency symbols and extract number
+        const cleaned = beforeBr.replace(/[^0-9.-]/g, '');
+        return parseFloat(cleaned) || 0;
     },
 
     /**
