@@ -36,8 +36,15 @@ const Processor = {
 
                     console.log(`[${file.name}] Identified as: ${sourceInfo.def.name} in sheet: ${sourceInfo.sheetName}`);
 
-                    // 2. Extract & Normalize (using the specific sheet data found)
-                    const normalizedData = this.normalizeData(file.name, sourceInfo.jsonData, sourceInfo);
+                    // 2. Extract & Normalize
+                    let normalizedData;
+
+                    // Special handling for salary summary files
+                    if (sourceInfo.def.type === 'salary_summary') {
+                        normalizedData = this.normalizeSalarySummary(file.name, sourceInfo.jsonData, sourceInfo);
+                    } else {
+                        normalizedData = this.normalizeData(file.name, sourceInfo.jsonData, sourceInfo);
+                    }
 
                     // 3. Classify
                     const classifiedData = this.classifyData(normalizedData);
@@ -157,6 +164,140 @@ const Processor = {
                 raw_filename: filename
             });
         }
+        return results;
+    },
+
+    /**
+     * Normalizes salary summary data (급여총괄표).
+     * Extracts totals from specific columns and creates accounting entries.
+     */
+    normalizeSalarySummary(filename, jsonData, sourceInfo) {
+        const { def, headerRow, headerIndex } = sourceInfo;
+        const map = def.mapping;
+        const results = [];
+
+        // Helper to find column index
+        const getColIdx = (fieldName) => {
+            if (!fieldName) return -1;
+            const cleanTarget = fieldName.replace(/\s+/g, '');
+
+            // 1. Exact match
+            let idx = headerRow.indexOf(fieldName);
+            if (idx !== -1) return idx;
+
+            // 2. Fuzzy match (ignore spaces)
+            idx = headerRow.findIndex(h => h.replace(/\s+/g, '') === cleanTarget);
+            if (idx !== -1) return idx;
+
+            // 3. Substring match
+            idx = headerRow.findIndex(h => h.includes(fieldName));
+            if (idx !== -1) return idx;
+
+            return -1;
+        };
+
+        // Find columns for net payment and total deduction
+        const idxNetPayment = getColIdx(map.net_payment);      // 차인지급액
+        const idxTotalDeduction = getColIdx(map.total_deduction); // 공제합계
+        const idxEmployeeName = getColIdx(map.employee_name);  // 성명
+
+        console.log(`[Salary Summary] Column indices - Net Payment: ${idxNetPayment}, Total Deduction: ${idxTotalDeduction}, Name: ${idxEmployeeName}`);
+
+
+        // Find the '합계' (total) row
+        let totalRow = null;
+        let totalRowIndex = -1;
+
+        console.log(`[Salary Summary] Searching for '합계' row in data with ${jsonData.length} total rows`);
+
+        for (let i = headerIndex + 1; i < jsonData.length; i++) {
+            const row = jsonData[i];
+            if (!row || row.length === 0) continue;
+
+            // Debug: log first 40 rows to help identify the structure (합계 is around row 30)
+            if (i - headerIndex <= 40) {
+                console.log(`[Salary Summary] Row ${i}:`, row.slice(0, 10)); // Show first 10 columns
+            }
+
+            // More flexible matching: check if '합계' appears in ANY column of this row
+            const rowContainsTotal = row.some(cell => {
+                if (!cell) return false;
+                const cellValue = String(cell).trim();
+                const cleanValue = cellValue.replace(/\s+/g, ''); // Remove all spaces
+                return cleanValue.includes('합계') || cleanValue === '합계';
+            });
+
+            if (rowContainsTotal) {
+                totalRow = row;
+                totalRowIndex = i;
+                console.log(`[Salary Summary] Found total row at index ${i}:`, row);
+                break;
+            }
+        }
+
+
+        if (!totalRow) {
+            console.warn(`[${filename}] Could not find '합계' row in salary summary`);
+            return results;
+        }
+
+        // Extract values
+        const netPaymentValue = this.extractKRW(totalRow[idxNetPayment] || 0);
+        const totalDeductionValue = this.extractKRW(totalRow[idxTotalDeduction] || 0);
+
+        console.log(`[Salary Summary] Net Payment: ${netPaymentValue}, Total Deduction: ${totalDeductionValue}`);
+
+        // Get current date for the entries
+        const currentDate = new Date();
+        const stdDate = this.formatDate(currentDate);
+
+        // Create Entry 1: 차인지급액 합계 → 직원인건비
+        results.push({
+            id: crypto.randomUUID(),
+            date: stdDate,
+            time: '',
+            amount: netPaymentValue,
+            raw_description: '직원 인건비',
+            item: '직원인건비',
+            category_detail: '',
+            category_main: '직원인건비',
+            category_mso: 'MSO인정경비',
+            raw_source: def.name,
+            raw_filename: filename
+        });
+
+        // Create Entry 2: 공제합계 → 직원소득세
+        results.push({
+            id: crypto.randomUUID(),
+            date: stdDate,
+            time: '',
+            amount: totalDeductionValue,
+            raw_description: '직원소득세',
+            item: '직원소득세',
+            category_detail: '',
+            category_main: '직원인건비',
+            category_mso: 'MSO인정경비',
+            raw_source: def.name,
+            raw_filename: filename
+        });
+
+        // Create Entry 3: (차인지급액 + 공제합계) × 1/12 → 직원 퇴직연금
+        const retirementPension = (netPaymentValue + totalDeductionValue) / 12;
+        results.push({
+            id: crypto.randomUUID(),
+            date: stdDate,
+            time: '',
+            amount: retirementPension,
+            raw_description: '직원 퇴직연금',
+            item: '직원 퇴직연금',
+            category_detail: '',
+            category_main: '직원인건비',
+            category_mso: 'MSO인정경비',
+            raw_source: def.name,
+            raw_filename: filename
+        });
+
+        console.log(`[Salary Summary] Created ${results.length} entries`);
         return results;
     },
 

@@ -73,6 +73,16 @@ const SOURCE_DEFINITIONS = [
             'raw_description': '가맹점명',
             'amount': '거래금액'
         }
+    },
+    {
+        type: 'salary_summary',
+        name: '급여총괄표',
+        signatures: ['차인지급액', '공제합계'],
+        mapping: {
+            'employee_name': '성명',
+            'net_payment': '차인지급액',
+            'total_deduction': '공제합계'
+        }
     }
 ];
 
