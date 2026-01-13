@@ -260,8 +260,8 @@ const Processor = {
             raw_description: '직원 인건비',
             item: '직원인건비',
             category_detail: '',
-            category_main: '직원인건비',
-            category_mso: 'MSO인정경비',
+            category_main: '직원 인건비',
+            category_mso: 'MSO 인정 경비',
             raw_source: def.name,
             raw_filename: filename
         });
@@ -275,8 +275,8 @@ const Processor = {
             raw_description: '직원소득세',
             item: '직원소득세',
             category_detail: '',
-            category_main: '직원인건비',
-            category_mso: 'MSO인정경비',
+            category_main: '직원 인건비',
+            category_mso: 'MSO 인정 경비',
             raw_source: def.name,
             raw_filename: filename
         });
@@ -291,8 +291,8 @@ const Processor = {
             raw_description: '직원 퇴직연금',
             item: '직원 퇴직연금',
             category_detail: '',
-            category_main: '직원인건비',
-            category_mso: 'MSO인정경비',
+            category_main: '직원 인건비',
+            category_mso: 'MSO 인정 경비',
             raw_source: def.name,
             raw_filename: filename
         });
