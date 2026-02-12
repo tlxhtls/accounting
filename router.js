@@ -75,6 +75,17 @@ const SOURCE_DEFINITIONS = [
         }
     },
     {
+        type: 'hyundai_card',
+        name: '현대카드',
+        signatures: ['승인일', '가맹점명', '승인금액'],
+        mapping: {
+            'date': '승인일',
+            'time': '승인시각',
+            'raw_description': '가맹점명',
+            'amount': '승인금액'
+        }
+    },
+    {
         type: 'salary_summary',
         name: '급여총괄표',
         signatures: ['차인지급액', '공제합계'],

@@ -425,20 +425,29 @@ const Processor = {
         }
 
         // String Parsing
-        let str = String(d).trim();
+        let FullStr = String(d).trim();
 
-        // 1. Split by space or T to remove time part (e.g. "2025-10-21 15:30" -> "2025-10-21")
-        str = str.split(/[\sT]+/)[0];
+        // 1. Handle "2026년 01월 23일" format first (since it contains spaces)
+        const koDateMatch = FullStr.match(/(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})일/);
+        if (koDateMatch) {
+            const year = koDateMatch[1];
+            const month = koDateMatch[2].padStart(2, '0');
+            const day = koDateMatch[3].padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
 
-        // 2. Replace . / with -
+        // 2. Split by space or T to remove time part (e.g. "2025-10-21 15:30" -> "2025-10-21")
+        let str = FullStr.split(/[\sT]+/)[0];
+
+        // 3. Replace . / with -
         str = str.replace(/[\.\/]/g, '-');
 
-        // 3. Handle YYYYMMDD (8 digits)
+        // 4. Handle YYYYMMDD (8 digits)
         if (/^\d{8}$/.test(str)) {
             return `${str.substring(0, 4)}-${str.substring(4, 6)}-${str.substring(6, 8)}`;
         }
 
-        // 4. If it matches YYYY-MM-DD format, return it
+        // 5. If it matches YYYY-MM-DD format, return it
         if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
             return str;
         }
