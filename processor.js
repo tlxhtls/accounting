@@ -133,8 +133,14 @@ const Processor = {
             const row = jsonData[i];
             if (!row || row.length === 0) continue;
 
-            const valDate = row[idxDate];
-            if (!valDate) continue; // Skip empty rows
+            const valDate = row[idxDate] ? String(row[idxDate]).trim() : '';
+            if (!valDate || valDate === '-') continue; // Skip empty rows or placeholder dates
+
+            // Raw Description
+            const valDesc = (idxDesc !== -1 && row[idxDesc]) ? String(row[idxDesc]).trim() : '';
+            
+            // Skip subtotal/summary rows (commonly found in cards like Hyundai)
+            if (valDesc.includes('소계') || valDesc.includes('합계')) continue;
 
             // Amount logic
             let valAmount = 0;
@@ -144,8 +150,6 @@ const Processor = {
             // Extract KRW amount (handles foreign currency patterns)
             valAmount = this.extractKRW(valAmount);
 
-            // Raw Description
-            const valDesc = (idxDesc !== -1 && row[idxDesc]) ? String(row[idxDesc]).trim() : '';
 
             // Date Normalization
             const stdDate = this.formatDate(valDate);
