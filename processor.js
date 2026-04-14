@@ -144,11 +144,20 @@ const Processor = {
 
             // Amount logic
             let valAmount = 0;
-            if (idxAmtMain !== -1 && row[idxAmtMain]) valAmount = row[idxAmtMain];
-            else if (idxAmtAlt !== -1 && row[idxAmtAlt]) valAmount = row[idxAmtAlt];
+            const amtMain = (idxAmtMain !== -1 && row[idxAmtMain]) ? this.extractKRW(row[idxAmtMain]) : 0;
+            const amtAlt = (idxAmtAlt !== -1 && row[idxAmtAlt]) ? this.extractKRW(row[idxAmtAlt]) : 0;
 
-            // Extract KRW amount (handles foreign currency patterns)
-            valAmount = this.extractKRW(valAmount);
+            if (def.type && def.type.includes('account')) {
+                if (amtMain > 0) {
+                    valAmount = amtMain;
+                } else if (amtAlt > 0) {
+                    continue; // Skip income rows
+                } else {
+                    continue; // Skip rows with 0 amount
+                }
+            } else {
+                valAmount = amtMain || amtAlt;
+            }
 
 
             // Date Normalization
