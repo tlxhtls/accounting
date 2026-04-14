@@ -209,12 +209,14 @@ const Processor = {
             return -1;
         };
 
-        // Find columns for net payment and total deduction
+        // Find columns for net payment, total deduction, and taxes
         const idxNetPayment = getColIdx(map.net_payment);      // 차인지급액
         const idxTotalDeduction = getColIdx(map.total_deduction); // 공제합계
+        const idxIncomeTax = getColIdx(map.income_tax);        // 소득세
+        const idxLocalIncomeTax = getColIdx(map.local_income_tax); // 지방소득세
         const idxEmployeeName = getColIdx(map.employee_name);  // 성명
 
-        console.log(`[Salary Summary] Column indices - Net Payment: ${idxNetPayment}, Total Deduction: ${idxTotalDeduction}, Name: ${idxEmployeeName}`);
+        console.log(`[Salary Summary] Column indices - Net Payment: ${idxNetPayment}, Total Deduction: ${idxTotalDeduction}, Income Tax: ${idxIncomeTax}, Local Tax: ${idxLocalIncomeTax}`);
 
 
         // Find the '합계' (total) row
@@ -257,8 +259,10 @@ const Processor = {
         // Extract values
         const netPaymentValue = this.extractKRW(totalRow[idxNetPayment] || 0);
         const totalDeductionValue = this.extractKRW(totalRow[idxTotalDeduction] || 0);
+        const incomeTaxValue = this.extractKRW(totalRow[idxIncomeTax] || 0);
+        const localIncomeTaxValue = this.extractKRW(totalRow[idxLocalIncomeTax] || 0);
 
-        console.log(`[Salary Summary] Net Payment: ${netPaymentValue}, Total Deduction: ${totalDeductionValue}`);
+        console.log(`[Salary Summary] Net Payment: ${netPaymentValue}, Total Deduction: ${totalDeductionValue}, Taxes: ${incomeTaxValue} + ${localIncomeTaxValue}`);
 
         // Get current date for the entries
         const currentDate = new Date();
@@ -279,14 +283,15 @@ const Processor = {
             raw_filename: filename
         });
 
-        // Create Entry 2: 공제합계 → 직원소득세
+        // Create Entry 2: (소득세 합계 + 지방소득세 합계) → 직원인건비
+        const totalTaxes = incomeTaxValue + localIncomeTaxValue;
         results.push({
             id: crypto.randomUUID(),
             date: stdDate,
             time: '',
-            amount: totalDeductionValue,
-            raw_description: '직원소득세',
-            item: '직원소득세',
+            amount: totalTaxes,
+            raw_description: '직원 인건비 (세금)',
+            item: '직원인건비',
             category_detail: '',
             category_main: '직원 인건비',
             category_mso: 'MSO 인정 경비',

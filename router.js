@@ -92,7 +92,9 @@ const SOURCE_DEFINITIONS = [
         mapping: {
             'employee_name': '성명',
             'net_payment': '차인지급액',
-            'total_deduction': '공제합계'
+            'total_deduction': '공제합계',
+            'income_tax': '소득세',
+            'local_income_tax': '지방소득세'
         }
     }
 ];
