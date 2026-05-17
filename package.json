@@ -1,4 +1,7 @@
 {
+  "scripts": {
+    "test": "node test-parser.js"
+  },
   "dependencies": {
     "xlsx": "^0.18.5"
   }

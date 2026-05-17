@@ -1,9 +1,11 @@
 # Example folder (legacy scripts)
 example/
+node_modules/
 
 # Excel files (sensitive data)
 *.xls
 *.xlsx
+card-cancel-refund-report.html
 
 # OS generated files
 .DS_Store

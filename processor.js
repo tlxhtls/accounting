@@ -21,12 +21,12 @@ const Processor = {
                     let data = new Uint8Array(e.target.result);
 
                     // Pre-process HTML-based .xls files (fix malformed <td> tags)
-                    data = this.preprocessHtmlIfNeeded(data, file.name);
+                    data = this.preprocessHtmlIfNeeded(data);
 
                     const workbook = XLSX.read(data, { type: 'array' });
 
                     // 1. Identify Source (using Router)
-                    const sourceInfo = window.Router.identifySource(file.name, workbook);
+                    const sourceInfo = window.Router.identifySource(workbook);
 
                     if (!sourceInfo.def) {
                         console.warn(`[${file.name}] Source identification failed. Header probe: ${sourceInfo.debugHeader}`);
@@ -65,7 +65,7 @@ const Processor = {
      * Pre-processes HTML-based Excel files to fix malformed <td> tags.
      * Some banks export .xls files that are actually HTML with missing </td> tags.
      */
-    preprocessHtmlIfNeeded(data, filename) {
+    preprocessHtmlIfNeeded(data) {
         const textDecoder = new TextDecoder('utf-8');
         const text = textDecoder.decode(data.slice(0, 500));
 
@@ -128,6 +128,10 @@ const Processor = {
         const idxDesc = getColIdx(map.raw_description);
         const idxAmtMain = getColIdx(map.amount);
         const idxAmtAlt = getColIdx(map.amount_alt);
+        const idxCancelStatus = getColIdx(map.cancel_status);
+        const idxCancelAmount = getColIdx(map.cancel_amount);
+        const idxPurchaseStatus = getColIdx(map.purchase_status);
+        const idxApprovalNo = getColIdx(map.approval_no);
 
         for (let i = headerIndex + 1; i < jsonData.length; i++) {
             const row = jsonData[i];
@@ -138,6 +142,10 @@ const Processor = {
 
             // Raw Description
             const valDesc = (idxDesc !== -1 && row[idxDesc]) ? String(row[idxDesc]).trim() : '';
+            const cancelStatus = (idxCancelStatus !== -1 && row[idxCancelStatus]) ? String(row[idxCancelStatus]).trim() : '';
+            const cancelAmount = (idxCancelAmount !== -1 && row[idxCancelAmount]) ? this.extractKRW(row[idxCancelAmount]) : 0;
+            const purchaseStatus = (idxPurchaseStatus !== -1 && row[idxPurchaseStatus]) ? String(row[idxPurchaseStatus]).trim() : '';
+            const approvalNo = (idxApprovalNo !== -1 && row[idxApprovalNo]) ? String(row[idxApprovalNo]).trim() : '';
             
             // Skip subtotal/summary rows (commonly found in cards like Hyundai)
             if (valDesc.includes('소계') || valDesc.includes('합계')) continue;
@@ -146,6 +154,15 @@ const Processor = {
             let valAmount = 0;
             const amtMain = (idxAmtMain !== -1 && row[idxAmtMain]) ? this.extractKRW(row[idxAmtMain]) : 0;
             const amtAlt = (idxAmtAlt !== -1 && row[idxAmtAlt]) ? this.extractKRW(row[idxAmtAlt]) : 0;
+            let transactionMeta = {
+                transaction_type: 'expense',
+                original_amount: '',
+                refund_amount: '',
+                cancel_status: cancelStatus,
+                purchase_status: purchaseStatus,
+                approval_no: approvalNo,
+                needs_review: false
+            };
 
             if (def.type && def.type.includes('account')) {
                 if (amtMain > 0) {
@@ -156,7 +173,15 @@ const Processor = {
                     continue; // Skip rows with 0 amount
                 }
             } else {
-                valAmount = amtMain || amtAlt;
+                const cardResult = this.resolveCardTransaction(def, amtMain || amtAlt, cancelStatus, cancelAmount, purchaseStatus);
+                if (!cardResult.include) {
+                    continue;
+                }
+                valAmount = cardResult.amount;
+                transactionMeta = {
+                    ...transactionMeta,
+                    ...cardResult.meta
+                };
             }
 
 
@@ -174,10 +199,82 @@ const Processor = {
                 category_main: '',            // (L) - 중분류
                 category_mso: '',             // (M) - MSO
                 raw_source: def.name,
-                raw_filename: filename
+                raw_filename: filename,
+                ...transactionMeta
             });
         }
         return results;
+    },
+
+    /**
+     * Resolves card cancellation/refund rows into exportable expense rows.
+     * Full cancellations are excluded when the card export marks them clearly.
+     * Partial refunds never reduce the export amount: over-counting is safer
+     * than under-counting for this expense summary workflow.
+     */
+    resolveCardTransaction(def, amount, cancelStatus, cancelAmount, purchaseStatus) {
+        if (!def.type || !def.type.includes('card')) {
+            return {
+                include: !!amount,
+                amount,
+                meta: { transaction_type: 'expense' }
+            };
+        }
+
+        const normalizedStatus = String(cancelStatus || '').replace(/\s+/g, '').toLowerCase();
+        const normalizedPurchase = String(purchaseStatus || '').replace(/\s+/g, '').toLowerCase();
+        const refundAmount = Math.abs(cancelAmount || 0);
+        const hasCancelSignal = this.hasCancelSignal(normalizedStatus, normalizedPurchase);
+        const isPartialRefund = normalizedPurchase.includes('부분취소')
+            || (amount > 0 && refundAmount > 0 && refundAmount < amount);
+
+        if (!amount) {
+            return { include: false };
+        }
+
+        if (amount < 0) {
+            if (isPartialRefund) {
+                return { include: false };
+            }
+            return { include: false };
+        }
+
+        if (isPartialRefund) {
+            return {
+                include: true,
+                amount,
+                meta: {
+                    transaction_type: 'partial_refund',
+                    original_amount: amount,
+                    refund_amount: refundAmount,
+                    needs_review: true
+                }
+            };
+        }
+
+        if (hasCancelSignal || refundAmount >= amount) {
+            return { include: false };
+        }
+
+        return {
+            include: true,
+            amount,
+            meta: { transaction_type: 'expense' }
+        };
+    },
+
+    hasCancelSignal(normalizedStatus, normalizedPurchase) {
+        const normalStatuses = ['정상', '접수', '전표매입', '결제확정', 'n', '-'];
+        if (normalStatuses.includes(normalizedStatus) && !normalizedPurchase.includes('취소')) {
+            return false;
+        }
+
+        return normalizedStatus.includes('취소')
+            || normalizedStatus.includes('환불')
+            || normalizedStatus.includes('승인취소')
+            || normalizedStatus === 'y'
+            || normalizedPurchase.includes('취소')
+            || normalizedPurchase.includes('환불');
     },
 
     /**
@@ -445,6 +542,11 @@ const Processor = {
         // String Parsing
         let FullStr = String(d).trim();
 
+        // Excel Serial Date can arrive as a numeric string from HTML-based .xls files.
+        if (/^\d{5}(?:\.\d+)?$/.test(FullStr)) {
+            return this.formatDate(Number(FullStr));
+        }
+
         // 1. Handle "2026년 01월 23일" format first (since it contains spaces)
         const koDateMatch = FullStr.match(/(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})일/);
         if (koDateMatch) {
@@ -454,18 +556,28 @@ const Processor = {
             return `${year}-${month}-${day}`;
         }
 
-        // 2. Split by space or T to remove time part (e.g. "2025-10-21 15:30" -> "2025-10-21")
+        // 2. Handle card exports that use M/D/YY, e.g. "4/29/26".
+        const slashDateMatch = FullStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:\s|$)/);
+        if (slashDateMatch) {
+            const month = slashDateMatch[1].padStart(2, '0');
+            const day = slashDateMatch[2].padStart(2, '0');
+            const rawYear = slashDateMatch[3];
+            const year = rawYear.length === 2 ? `20${rawYear}` : rawYear;
+            return `${year}-${month}-${day}`;
+        }
+
+        // 3. Split by space or T to remove time part (e.g. "2025-10-21 15:30" -> "2025-10-21")
         let str = FullStr.split(/[\sT]+/)[0];
 
-        // 3. Replace . / with -
+        // 4. Replace . / with -
         str = str.replace(/[\.\/]/g, '-');
 
-        // 4. Handle YYYYMMDD (8 digits)
+        // 5. Handle YYYYMMDD (8 digits)
         if (/^\d{8}$/.test(str)) {
             return `${str.substring(0, 4)}-${str.substring(4, 6)}-${str.substring(6, 8)}`;
         }
 
-        // 5. If it matches YYYY-MM-DD format, return it
+        // 6. If it matches YYYY-MM-DD format, return it
         if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
             return str;
         }
@@ -527,4 +639,10 @@ const Processor = {
 };
 
 // Expose to window
-window.Processor = Processor;
+if (typeof window !== 'undefined') {
+    window.Processor = Processor;
+}
+
+if (typeof module !== 'undefined') {
+    module.exports = { Processor };
+}

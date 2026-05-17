@@ -17,7 +17,9 @@ const SOURCE_DEFINITIONS = [
             'time': '이용시간',
             'raw_description': '이용하신곳',
             'amount': '이용금액(원)',
-            'amount_alt': '이용금액'
+            'amount_alt': '이용금액',
+            'cancel_status': '상태',
+            'approval_no': '승인번호'
         }
     },
     {
@@ -28,7 +30,9 @@ const SOURCE_DEFINITIONS = [
             'date': '승인일시',
             'raw_description': '가맹점명',
             'amount': '승인금액',
-            'amount_alt': '거래금액'
+            'amount_alt': '거래금액',
+            'cancel_amount': '취소일자\n취소금액',
+            'approval_no': '승인번호'
         }
     },
     {
@@ -38,7 +42,10 @@ const SOURCE_DEFINITIONS = [
         mapping: {
             'date': '거래일',
             'raw_description': '가맹점명',
-            'amount': '금액'
+            'amount': '금액',
+            'cancel_status': '취소상태',
+            'purchase_status': '매입구분',
+            'approval_no': '승인번호'
         }
     },
     {
@@ -49,7 +56,23 @@ const SOURCE_DEFINITIONS = [
             'date': '승인일자',
             'time': '승인시각',
             'raw_description': '가맹점명',
-            'amount': '승인금액(원)'
+            'amount': '승인금액(원)',
+            'cancel_status': '취소여부',
+            'approval_no': '승인번호'
+        }
+    },
+    {
+        type: 'lotte_card',
+        name: '롯데카드',
+        signatures: ['이용일자', '이용가맹점', '이용금액', '취소여부'],
+        mapping: {
+            'date': '이용일자',
+            'time': '이용시간',
+            'raw_description': '이용가맹점',
+            'amount': '이용금액',
+            'cancel_status': '취소여부',
+            'cancel_amount': '취소금액',
+            'approval_no': '승인번호'
         }
     },
     {
@@ -71,7 +94,8 @@ const SOURCE_DEFINITIONS = [
         mapping: {
             'date': '이용일시',
             'raw_description': '가맹점명',
-            'amount': '거래금액'
+            'amount': '거래금액',
+            'cancel_status': '상태'
         }
     },
     {
@@ -82,7 +106,9 @@ const SOURCE_DEFINITIONS = [
             'date': '승인일',
             'time': '승인시각',
             'raw_description': '가맹점명',
-            'amount': '승인금액'
+            'amount': '승인금액',
+            'cancel_status': '상태',
+            'approval_no': '승인번호'
         }
     },
     {
@@ -107,7 +133,7 @@ const Router = {
      * @param {Object} workbook - XLSX workbook object
      * @returns {Object} result - { def, headerRow, headerIndex, sheetName, jsonData } or error info
      */
-    identifySource(filename, workbook) {
+    identifySource(workbook) {
         // Scan each sheet
         for (const sheetName of workbook.SheetNames) {
             const worksheet = workbook.Sheets[sheetName];
@@ -160,4 +186,10 @@ const Router = {
 };
 
 // Expose to window
-window.Router = Router;
+if (typeof window !== 'undefined') {
+    window.Router = Router;
+}
+
+if (typeof module !== 'undefined') {
+    module.exports = { Router, SOURCE_DEFINITIONS };
+}
