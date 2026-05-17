@@ -530,8 +530,9 @@ const Processor = {
 
         // Excel Serial Date
         if (typeof d === 'number') {
-            // Adjust for Excel epoch (approx)
-            const dt = new Date(Math.round((d - 25569) * 86400 * 1000));
+            // Ignore the fractional time portion; date and time are separate fields.
+            const dateSerial = Math.floor(d);
+            const dt = new Date(Math.round((dateSerial - 25569) * 86400 * 1000));
             // Return YYYY-MM-DD
             const year = dt.getFullYear();
             const month = String(dt.getMonth() + 1).padStart(2, '0');

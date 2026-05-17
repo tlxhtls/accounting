@@ -51,6 +51,9 @@ function normalizeFixture(filename) {
 {
     if (fixtureExists('씨티계좌지출.xls')) {
         const rows = normalizeFixture('씨티계좌지출.xls');
+        assert.equal(rows[0].date, '2026-04-30');
+        assert.equal(rows[0].time, '18:50:26');
+        assert.match(rows[0].date, /^\d{4}-\d{2}-\d{2}$/);
         assert.equal(rows.some(row => row.raw_description === '신한카드캐시백'), false);
         assert.equal(rows.some(row => row.raw_description === '신한카드환불'), false);
         assert.equal(rows.some(row => row.amount <= 0), false);
@@ -109,6 +112,10 @@ function normalizeFixture(filename) {
     assert.equal(rows[1].transaction_type, 'partial_refund');
     assert.equal(rows[1].refund_amount, 3000);
     assert.equal(rows[1].needs_review, true);
+}
+
+{
+    assert.equal(Processor.formatDate(46142.999), '2026-04-30');
 }
 
 console.log('parser tests passed');

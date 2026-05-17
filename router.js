@@ -138,7 +138,7 @@ const Router = {
         for (const sheetName of workbook.SheetNames) {
             const worksheet = workbook.Sheets[sheetName];
             // Use header:1 to get array of arrays
-            const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+            const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: true });
             if (!jsonData || jsonData.length === 0) continue;
 
             // Search first N rows for a matching header signature
@@ -179,7 +179,7 @@ const Router = {
 
         // Return debug info if no match (from first sheet)
         const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-        const firstJson = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+        const firstJson = XLSX.utils.sheet_to_json(firstSheet, { header: 1, raw: true });
         const firstRow = (firstJson && firstJson[0]) ? firstJson[0].slice(0, 10).join(',') : 'EMPTY';
         return { def: null, debugHeader: firstRow };
     }
