@@ -624,6 +624,17 @@ const Processor = {
         });
 
         const ws = XLSX.utils.aoa_to_sheet(wsData);
+        // Keep 발생일시 as literal text so spreadsheet apps cannot reinterpret it as weekday-only formatting.
+        for (let r = 1; r < wsData.length; r++) {
+            const cellRef = XLSX.utils.encode_cell({ r, c: 0 });
+            if (ws[cellRef]) {
+                ws[cellRef].t = 's';
+                ws[cellRef].v = String(ws[cellRef].v || '');
+                ws[cellRef].w = ws[cellRef].v;
+                ws[cellRef].z = '@';
+            }
+        }
+
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "지출내역_통합");
 

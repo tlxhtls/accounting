@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const os = require('node:os');
 const fs = require('node:fs');
 const path = require('node:path');
 const XLSX = require('xlsx');
@@ -18,7 +19,9 @@ function fixtureExists(filename) {
 }
 
 function readSource(filename) {
-    const workbook = XLSX.readFile(path.join(__dirname, filename), { raw: false });
+    let data = new Uint8Array(fs.readFileSync(path.join(__dirname, filename)));
+    data = Processor.preprocessHtmlIfNeeded(data);
+    const workbook = XLSX.read(data, { type: 'array' });
     const sourceInfo = Router.identifySource(workbook);
     assert.ok(sourceInfo.def, `${filename} should be identified`);
     return sourceInfo;
@@ -61,6 +64,17 @@ function normalizeFixture(filename) {
 }
 
 {
+    if (fixtureExists('씨티카드지출.xls')) {
+        const rows = normalizeFixture('씨티카드지출.xls');
+        assert.equal(rows[0].date, '2026-04-30');
+        assert.equal(rows[0].raw_description, '쿠팡(로켓와우클럽');
+        assert.equal(rows[0].amount, 7890);
+        assert.match(rows[0].date, /^\d{4}-\d{2}-\d{2}$/);
+        assert.equal(rows.some(row => /[월화수목금토일]요일?/.test(row.date)), false);
+    }
+}
+
+{
     assert.ok(fixtureExists('신한카드지출.xls'), '신한카드지출.xls fixture is required');
     const rows = normalizeFixture('신한카드지출.xls');
 
@@ -71,7 +85,9 @@ function normalizeFixture(filename) {
     );
     assert.equal(rows.some(row => row.purchase_status === '부분취소'), false);
 
-    const workbook = XLSX.readFile(path.join(__dirname, '신한카드지출.xls'), { raw: false });
+    let data = new Uint8Array(fs.readFileSync(path.join(__dirname, '신한카드지출.xls')));
+    data = Processor.preprocessHtmlIfNeeded(data);
+    const workbook = XLSX.read(data, { type: 'array' });
     const sourceInfo = Router.identifySource(workbook);
     assert.equal(sourceInfo.def.type, 'shinhan_card');
     const misnamedRows = Processor.normalizeData('wrong-upload-name.xls', sourceInfo.jsonData, sourceInfo);
@@ -116,6 +132,30 @@ function normalizeFixture(filename) {
 
 {
     assert.equal(Processor.formatDate(46142.999), '2026-04-30');
+}
+
+{
+    const tmpFile = path.join(os.tmpdir(), `accounting-export-${Date.now()}.xlsx`);
+    Processor.exportToExcel([{
+        display_date: '2026-04-30',
+        item: '',
+        raw_description: '씨티카드 날짜 서식 검증',
+        amount: 7890,
+        col_transfer: '',
+        col_account: '',
+        col_cash: '',
+        col_card: 7890,
+        col_card_detail: '씨티카드',
+        category_main: '',
+        category_mso: ''
+    }], tmpFile);
+
+    const workbook = XLSX.readFile(tmpFile, { cellStyles: true });
+    const cell = workbook.Sheets['지출내역_통합'].A2;
+    assert.equal(cell.t, 's');
+    assert.equal(cell.v, '2026-04-30');
+    assert.equal(cell.z, '@');
+    fs.unlinkSync(tmpFile);
 }
 
 console.log('parser tests passed');
