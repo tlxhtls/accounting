@@ -78,6 +78,7 @@ const SOURCE_DEFINITIONS = [
     {
         type: 'citi_account',
         name: '씨티계좌',
+        preferFormatted: true,
         signatures: ['거래일시', '적요', '찾으신금액', '맡기신금액'],
         mapping: {
             'date': '거래일시',
@@ -90,6 +91,7 @@ const SOURCE_DEFINITIONS = [
     {
         type: 'citi_card',
         name: '씨티카드',
+        preferFormatted: true,
         signatures: ['이용일시', '이용카드', '가맹점명', '거래금액'],
         mapping: {
             'date': '이용일시',
@@ -137,15 +139,15 @@ const Router = {
         // Scan each sheet
         for (const sheetName of workbook.SheetNames) {
             const worksheet = workbook.Sheets[sheetName];
-            // Use header:1 to get array of arrays
-            const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: true });
-            if (!jsonData || jsonData.length === 0) continue;
+            const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: true });
+            const formattedData = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false });
+            if (!rawData || rawData.length === 0) continue;
 
             // Search first N rows for a matching header signature
             const MAX_SEARCH_ROWS = 500; // Deep search
 
-            for (let i = 0; i < Math.min(MAX_SEARCH_ROWS, jsonData.length); i++) {
-                const row = jsonData[i].map(c => c ? String(c).trim() : '');
+            for (let i = 0; i < Math.min(MAX_SEARCH_ROWS, rawData.length); i++) {
+                const row = rawData[i].map(c => c ? String(c).trim() : '');
 
                 // Prepare clean row for matching
                 const cleanRow = row.map(r => r.replace(/\s+/g, ''));
@@ -170,7 +172,7 @@ const Router = {
                             headerRow: row,
                             headerIndex: i,
                             sheetName,
-                            jsonData
+                            jsonData: def.preferFormatted ? formattedData : rawData
                         };
                     }
                 }
@@ -179,7 +181,7 @@ const Router = {
 
         // Return debug info if no match (from first sheet)
         const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-        const firstJson = XLSX.utils.sheet_to_json(firstSheet, { header: 1, raw: true });
+        const firstJson = XLSX.utils.sheet_to_json(firstSheet, { header: 1, raw: false });
         const firstRow = (firstJson && firstJson[0]) ? firstJson[0].slice(0, 10).join(',') : 'EMPTY';
         return { def: null, debugHeader: firstRow };
     }
